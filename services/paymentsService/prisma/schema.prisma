@@ -1,0 +1,98 @@
+// Servicio de pagos: cobros con idempotencia y pasarela simulada.
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("PAYMENTS_DATABASE_URL")
+}
+
+enum PaymentStatus {
+  ACREDITADO
+  RECHAZADO
+  REEMBOLSADO
+}
+
+model Payment {
+  id                String        @id @default(uuid())
+  orderId           String
+  folio             String
+  clienteId         String
+  monto             Float
+  moneda            String        @default("MXN")
+  status            PaymentStatus
+  marca             String
+  ultimos4          String
+  titular           String
+  referencia        String?
+  motivoRechazo     String?
+  /// Sólo se llena cuando el cobro se acredita: UNIQUE garantiza un solo cargo por pedido.
+  acreditadoOrderId String?       @unique
+  idempotencyKey    String?
+  createdAt         DateTime      @default(now())
+  refundedAt        DateTime?
+
+  @@index([orderId])
+  @@index([clienteId, createdAt])
+}
+
+/// Registro de llaves de idempotencia: el mismo clic repetido devuelve la misma respuesta.
+model IdempotencyKey {
+  key            String   @id
+  requestHash    String
+  estado         String
+  responseStatus Int?
+  responseBody   Json?
+  createdAt      DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model OutboxEvent {
+  id            String    @id @default(uuid())
+  type          String
+  payload       Json
+  correlationId String?
+  createdAt     DateTime  @default(now())
+  publishedAt   DateTime?
+  attempts      Int       @default(0)
+  lastError     String?
+
+  @@index([publishedAt, createdAt])
+}
+
+model ProcessedEvent {
+  eventId     String
+  consumer    String
+  processedAt DateTime @default(now())
+
+  @@id([eventId, consumer])
+}
+
+/// Tarjetas guardadas del cliente: Rumbo solo conoce el token, la marca y los últimos 4.
+model SavedCard {
+  id         String   @id @default(uuid())
+  clienteId  String
+  alias      String
+  marca      String
+  ultimos4   String
+  titular    String
+  expiracion String
+  token      String   @unique
+  principal  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([clienteId])
+}
+
+/// Bóveda de la pasarela SIMULADA (representa al proveedor externo):
+/// el número completo se guarda cifrado con AES-256-GCM y nunca sale de aquí.
+model GatewayVault {
+  token         String   @id
+  numeroCifrado String
+  iv            String
+  tag           String
+  createdAt     DateTime @default(now())
+}

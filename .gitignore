@@ -1,0 +1,16 @@
+node_modules
+dist
+.env
+*.log
+.DS_Store
+coverage
+**/src/generated
+.vite
+
+# Credenciales locales y archivos generados
+.env.*
+!.env.example
+*.tsbuildinfo
+
+# Respaldo local del historial anterior
+.git-history-backup/
